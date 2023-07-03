@@ -66,18 +66,8 @@ contract FaultDisputeGame is IFaultDisputeGame, Clone, Semver {
     }
 
     ////////////////////////////////////////////////////////////////
-    //                       External Logic                       //
+    //                  `IFaultDisputeGame` impl                  //
     ////////////////////////////////////////////////////////////////
-
-    /// @inheritdoc IFaultDisputeGame
-    function attack(uint256 _parentIndex, Claim _pivot) external payable {
-        move(_parentIndex, _pivot, true);
-    }
-
-    /// @inheritdoc IFaultDisputeGame
-    function defend(uint256 _parentIndex, Claim _pivot) external payable {
-        move(_parentIndex, _pivot, false);
-    }
 
     /// @inheritdoc IFaultDisputeGame
     function step(
@@ -145,10 +135,9 @@ contract FaultDisputeGame is IFaultDisputeGame, Clone, Semver {
             }
         }
 
-        // INVARIANT: A VM step can never counter a parent claim unless it produces an unexpected
-        //            poststate. "Unexpected" is defined as "not equal to the claim at
-        //            `_parentIndex` if the step is an attack, or the claim at `_stateIndex` if
-        //            the step is a defense."
+        // INVARIANT: A VM step can never counter a parent claim unless it produces a poststate
+        //            that is not equal to the claim at `_parentIndex` if the step is an attack,
+        //            or the claim at `_stateIndex` if the step is a defense.
         if (VM.step(_stateData, _proof) == Claim.unwrap(postStateClaim)) {
             revert ValidStep();
         }
@@ -158,17 +147,13 @@ contract FaultDisputeGame is IFaultDisputeGame, Clone, Semver {
         parent.countered = true;
     }
 
-    ////////////////////////////////////////////////////////////////
-    //                       Internal Logic                       //
-    ////////////////////////////////////////////////////////////////
-
     /// @notice Internal move function, used by both `attack` and `defend`.
     /// @param _challengeIndex The index of the claim being moved against.
-    /// @param _pivot The claim at the next logical position in the game.
+    /// @param _claim The claim at the next logical position in the game.
     /// @param _isAttack Whether or not the move is an attack or defense.
     function move(
         uint256 _challengeIndex,
-        Claim _pivot,
+        Claim _claim,
         bool _isAttack
     ) public payable {
         // INVARIANT: Moves cannot be made unless the game is currently in progress.
@@ -234,7 +219,7 @@ contract FaultDisputeGame is IFaultDisputeGame, Clone, Semver {
 
         // INVARIANT: A claim may only exist at a given position once. Multiple claims may exist
         //            at the same position, however they must have different values.
-        ClaimHash claimHash = _pivot.hashClaimPos(nextPosition);
+        ClaimHash claimHash = _claim.hashClaimPos(nextPosition);
         if (claims[claimHash]) {
             revert ClaimAlreadyExists();
         }
@@ -244,7 +229,7 @@ contract FaultDisputeGame is IFaultDisputeGame, Clone, Semver {
         claimData.push(
             ClaimData({
                 parentIndex: uint32(_challengeIndex),
-                claim: _pivot,
+                claim: _claim,
                 position: nextPosition,
                 clock: nextClock,
                 countered: false
@@ -252,17 +237,22 @@ contract FaultDisputeGame is IFaultDisputeGame, Clone, Semver {
         );
 
         // Emit the appropriate event for the attack or defense.
-        emit Move(_challengeIndex, _pivot, msg.sender);
+        emit Move(_challengeIndex, _claim, msg.sender);
+    }
+
+    /// @inheritdoc IFaultDisputeGame
+    function attack(uint256 _parentIndex, Claim _claim) external payable {
+        move(_parentIndex, _claim, true);
+    }
+
+    /// @inheritdoc IFaultDisputeGame
+    function defend(uint256 _parentIndex, Claim _claim) external payable {
+        move(_parentIndex, _claim, false);
     }
 
     /// @inheritdoc IFaultDisputeGame
     function l2BlockNumber() public pure returns (uint256 l2BlockNumber_) {
         l2BlockNumber_ = _getArgUint256(0x20);
-    }
-
-    /// @notice Returns the length of the `claimData` array.
-    function claimDataLen() external view returns (uint256 len_) {
-        len_ = claimData.length;
     }
 
     ////////////////////////////////////////////////////////////////
@@ -381,6 +371,10 @@ contract FaultDisputeGame is IFaultDisputeGame, Clone, Semver {
         extraData_ = extraData();
     }
 
+    ////////////////////////////////////////////////////////////////
+    //                       MISC EXTERNAL                        //
+    ////////////////////////////////////////////////////////////////
+
     /// @inheritdoc IInitializable
     function initialize() external {
         // Set the game start
@@ -398,5 +392,10 @@ contract FaultDisputeGame is IFaultDisputeGame, Clone, Semver {
                 countered: false
             })
         );
+    }
+
+    /// @notice Returns the length of the `claimData` array.
+    function claimDataLen() external view returns (uint256 len_) {
+        len_ = claimData.length;
     }
 }
