@@ -55,6 +55,8 @@ func LoadELF(ctx *cli.Context) error {
 			err = mipsevm.PatchStack(state)
 		case "go":
 			err = mipsevm.PatchGo(elfProgram, state)
+		case "rust":
+			err = mipsevm.PatchRust(state)
 		default:
 			return fmt.Errorf("unrecognized form of patching: %q", typ)
 		}
